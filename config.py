@@ -48,7 +48,7 @@ STATE_FILE = "state.json"
 # AUTO_TRADE_ENABLED is the master switch. Leave it "false" until you've
 # watched alerts for a while and are ready to let the scanner place trades
 # on your behalf automatically.
-AUTO_TRADE_ENABLED = os.environ.get("AUTO_TRADE_ENABLED", "true").lower() == "true"
+AUTO_TRADE_ENABLED = os.environ.get("AUTO_TRADE_ENABLED", "false").lower() == "true"
 
 OANDA_API_TOKEN = os.environ.get("OANDA_API_TOKEN", "")
 OANDA_ACCOUNT_ID = os.environ.get("OANDA_ACCOUNT_ID", "")
@@ -73,6 +73,33 @@ TRADE_UNITS = int(os.environ.get("TRADE_UNITS", "10"))
 # away the ATR-based stop happens to be.
 USE_RISK_BASED_SIZING = os.environ.get("USE_RISK_BASED_SIZING", "false").lower() == "true"
 RISK_PER_TRADE_PERCENT = float(os.environ.get("RISK_PER_TRADE_PERCENT", "1.0"))
+
+# --- Strategy selection ---
+# "smc"      = Smart Money Concepts: liquidity sweep + market structure +
+#              fair value gap retracement (see smc.py)
+# "breakout" = the original support/resistance breakout (see technicals.py)
+STRATEGY_MODE = os.environ.get("STRATEGY_MODE", "smc")
+
+# --- Smart Money Concepts (smc.py) parameters ---
+SWING_LEFT = 2                  # bars on each side required to confirm a swing high/low
+SWING_RIGHT = 2
+SWEEP_LOOKBACK_BARS = 20        # how far back to look for a swing point that got swept
+FVG_SEARCH_BARS = 15            # how far back to look for a qualifying fair value gap
+TARGET_SEARCH_BARS = 50         # how far back to look for the nearest opposing liquidity (target)
+SMC_STOP_BUFFER_ATR_MULT = 0.25 # extra buffer beyond the sweep's wick, in ATR multiples
+MIN_RISK_REWARD = float(os.environ.get("MIN_RISK_REWARD", "2.0"))  # trades below this R:R are rejected
+
+# Inverse Fair Value Gap: when a normal FVG gets fully broken through
+# (price closes all the way past it), that same zone flips polarity and
+# can act as a reversal zone in the opposite direction. Set to False to
+# only trade FVGs in their original direction.
+ENABLE_INVERSE_FVG = os.environ.get("ENABLE_INVERSE_FVG", "true").lower() == "true"
+
+# --- News: extra-cautious window for the highest-impact event types ---
+# FOMC/rate decisions tend to move gold more violently and for longer than
+# an average "High" impact event, so they get a wider blackout window.
+FOMC_KEYWORDS = ["fomc", "interest rate", "rate decision", "press conference", "fed chair"]
+FOMC_BLACKOUT_MINUTES = int(os.environ.get("FOMC_BLACKOUT_MINUTES", "60"))
 
 # --- News filter ---
 NEWS_BLACKOUT_MINUTES = 30   # suppress signals this many minutes before/after high-impact news
