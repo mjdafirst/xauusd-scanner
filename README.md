@@ -26,7 +26,7 @@ GitHub runs it in the cloud on a schedule, no server of your own required.
 
 4. **Upload all these files** into the repo, keeping the folder structure:
    - `config.py`, `scanner.py`, `technicals.py`, `news.py`, `notifier.py`,
-     `requirements.txt`, `README.md`
+     `state.py`, `state.json`, `backtest.py`, `requirements.txt`, `README.md`
    - `.github/workflows/scan.yml` — **this exact path matters**, it's what
      tells GitHub to run the scanner on a schedule
    - On mobile: use GitHub's "Add file → Upload files" button from the repo
@@ -37,14 +37,20 @@ GitHub runs it in the cloud on a schedule, no server of your own required.
      `.github/workflows/scan.yml` in the filename box, which auto-creates
      the folders.
 
-5. **Add your Telegram credentials as secrets** (never put them directly
+5. **Allow the workflow to save its own state** (needed for the alert
+   cooldown to persist between scheduled runs):
+   - Repo → **Settings → Actions → General**
+   - Scroll to **Workflow permissions**
+   - Select **Read and write permissions** → **Save**
+
+6. **Add your Telegram credentials as secrets** (never put them directly
    in `config.py` in the repo):
    - Go to your repo → **Settings → Secrets and variables → Actions**
    - Click **New repository secret**, add:
      - Name: `TELEGRAM_BOT_TOKEN`, Value: your bot token
      - Name: `TELEGRAM_CHAT_ID`, Value: your chat id
 
-6. **Run it**
+7. **Run it**
    - Go to the **Actions** tab in your repo → select "XAUUSD Scanner" →
      **Run workflow** to trigger a manual test run immediately
    - Check the run's logs to confirm it worked, and check Telegram for the
@@ -90,6 +96,15 @@ your phone, with nothing installed locally.
 - **Technicals**: breakout above/below a rolling support/resistance range,
   confirmed by 20/50 EMA trend direction and filtered by RSI so it doesn't
   fire into already-overbought/oversold moves.
+- **Higher-timeframe filter**: the breakout must agree with the trend on a
+  bigger timeframe (`HTF_INTERVAL`, default 1h) — cuts down on breakouts
+  that fire against the larger trend and fail quickly.
+- **ATR-based stops/targets**: distances scale with recent volatility
+  instead of a fixed swing point, so they adapt to calm vs. choppy markets.
+- **Cooldown**: only one alert per breakout "episode" — it won't re-alert
+  every 15 minutes while price stays extended past the breakout level.
+  This relies on `state.json`, which the workflow commits back to the repo
+  after every run (see the one-time setting in step 5 above).
 - **News filter**: pulls a free weekly economic calendar and suppresses
   signals within `NEWS_BLACKOUT_MINUTES` of high-impact USD/gold-relevant
   events (NFP, CPI, FOMC, etc.), since these can cause erratic price action
@@ -97,18 +112,36 @@ your phone, with nothing installed locally.
 - **Alerts**: sent to Telegram with entry, stop, target, and the reasoning
   behind the signal.
 
+## Backtesting before you trust it
+
+Before relying on live alerts, sanity-check the strategy against history:
+```bash
+pip install -r requirements.txt
+python backtest.py                          # default: 15m candles, 60 days
+python backtest.py --interval 1h --period 2y  # longer history, coarser timeframe
+python backtest.py --csv trades.csv           # save every simulated trade to review
+```
+This replays the same breakout/trend/RSI/ATR logic bar-by-bar and reports
+win rate, reward:risk, and a rough expectancy in "R" (risk multiples). It
+does **not** model spread, slippage, commissions, or the news blackout
+filter, so treat it as a sanity check on the entry logic — not a precise
+P&L forecast — and remember a good backtest still doesn't guarantee future
+results.
+
 ## Tuning the strategy
 
 Everything is in `config.py`:
 - `SR_LOOKBACK_BARS` — how many candles define "recent" support/resistance
 - `RSI_OVERBOUGHT` / `RSI_OVERSOLD` — RSI filter thresholds
-- `EMA_FAST` / `EMA_SLOW` — trend filter
+- `EMA_FAST` / `EMA_SLOW` — trend filter (also used for the HTF filter)
+- `ATR_PERIOD`, `ATR_STOP_MULT`, `ATR_TARGET_MULT` — stop/target sizing
+- `HTF_INTERVAL`, `HTF_LOOKBACK_PERIOD` — higher-timeframe trend filter
 - `NEWS_BLACKOUT_MINUTES` — how wide a window to avoid trading around news
-- `CANDLE_INTERVAL` — timeframe (1m, 5m, 15m, 1h, etc.)
+- `CANDLE_INTERVAL` — main timeframe (1m, 5m, 15m, 1h, etc.)
 
 The strategy in `technicals.py` (`detect_signal`) is intentionally simple
-and readable — treat it as a starting template, not a finished edge. Back-test
-and paper-trade any changes before trusting it with real signals.
+and readable — treat it as a starting template, not a finished edge. Run
+`backtest.py` after any change before trusting it with real signals.
 
 ## Running 24/7
 
