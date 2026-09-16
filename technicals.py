@@ -21,6 +21,11 @@ def fetch_price_data():
         if df.empty:
             print("[technicals] No data returned.")
             return None
+        # Recent yfinance versions return MultiIndex columns (e.g. ("Close","GC=F"))
+        # even for a single ticker. Flatten to plain column names so downstream
+        # comparisons operate on scalars instead of nested Series.
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = df.columns.get_level_values(0)
         df = df.dropna()
         return df
     except Exception as e:
