@@ -48,7 +48,7 @@ STATE_FILE = "state.json"
 # AUTO_TRADE_ENABLED is the master switch. Leave it "false" until you've
 # watched alerts for a while and are ready to let the scanner place trades
 # on your behalf automatically.
-AUTO_TRADE_ENABLED = os.environ.get("AUTO_TRADE_ENABLED", "false").lower() == "true"
+AUTO_TRADE_ENABLED = os.environ.get("AUTO_TRADE_ENABLED", "true").lower() == "true"
 
 OANDA_API_TOKEN = os.environ.get("OANDA_API_TOKEN", "")
 OANDA_ACCOUNT_ID = os.environ.get("OANDA_ACCOUNT_ID", "")
