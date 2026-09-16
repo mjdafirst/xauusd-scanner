@@ -1,0 +1,49 @@
+name: XAUUSD Backtest
+
+# Manual only - trigger from the Actions tab whenever you want to check
+# historical performance. Results show up right in this run's logs.
+on:
+  workflow_dispatch:
+    inputs:
+      interval:
+        description: "Candle interval (e.g. 15m, 1h, 1d)"
+        required: false
+        default: "15m"
+      period:
+        description: "History length (e.g. 60d, 2y). Intraday intervals like 15m are limited to ~60d by Yahoo Finance."
+        required: false
+        default: "60d"
+      max_hold_bars:
+        description: "Max bars to hold a trade before giving up"
+        required: false
+        default: "96"
+
+jobs:
+  backtest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run backtest
+        run: |
+          python backtest.py \
+            --interval "${{ github.event.inputs.interval }}" \
+            --period "${{ github.event.inputs.period }}" \
+            --max-hold-bars "${{ github.event.inputs.max_hold_bars }}" \
+            --csv trades.csv
+
+      - name: Upload trade log
+        uses: actions/upload-artifact@v4
+        with:
+          name: backtest-trades
+          path: trades.csv
+          if-no-files-found: ignore
