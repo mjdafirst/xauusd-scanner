@@ -44,6 +44,36 @@ HTF_LOOKBACK_PERIOD = "30d"
 # 15 minutes for as long as the move continues.
 STATE_FILE = "state.json"
 
+# --- OANDA (auto-trading on a demo account) ---
+# AUTO_TRADE_ENABLED is the master switch. Leave it "false" until you've
+# watched alerts for a while and are ready to let the scanner place trades
+# on your behalf automatically.
+AUTO_TRADE_ENABLED = os.environ.get("AUTO_TRADE_ENABLED", "false").lower() == "true"
+
+OANDA_API_TOKEN = os.environ.get("OANDA_API_TOKEN", "")
+OANDA_ACCOUNT_ID = os.environ.get("OANDA_ACCOUNT_ID", "")
+OANDA_ENVIRONMENT = os.environ.get("OANDA_ENVIRONMENT", "practice")  # "practice" or "live"
+OANDA_INSTRUMENT = "XAU_USD"
+
+# Safety switch: even if AUTO_TRADE_ENABLED is on, the scanner refuses to
+# place any order unless OANDA_ENVIRONMENT is "practice" OR this is
+# explicitly set to true. This exists so a demo setup can never silently
+# start trading a live account by mistake (e.g. a typo, a copy-pasted
+# token, or a future you forgetting this was ever wired up).
+ALLOW_LIVE_TRADING = os.environ.get("ALLOW_LIVE_TRADING", "false").lower() == "true"
+
+# --- Position sizing ---
+# Fixed size used unless USE_RISK_BASED_SIZING is on. OANDA XAU_USD units
+# are roughly troy ounces — 10 units is a small, demo-appropriate size.
+TRADE_UNITS = int(os.environ.get("TRADE_UNITS", "10"))
+
+# If enabled, position size is calculated from account balance and the
+# signal's stop distance instead of using a fixed size, so each trade
+# risks roughly the same percentage of the account regardless of how far
+# away the ATR-based stop happens to be.
+USE_RISK_BASED_SIZING = os.environ.get("USE_RISK_BASED_SIZING", "false").lower() == "true"
+RISK_PER_TRADE_PERCENT = float(os.environ.get("RISK_PER_TRADE_PERCENT", "1.0"))
+
 # --- News filter ---
 NEWS_BLACKOUT_MINUTES = 30   # suppress signals this many minutes before/after high-impact news
 NEWS_IMPACT_LEVELS = ["High"]  # which impact levels count ("High", "Medium", "Low")

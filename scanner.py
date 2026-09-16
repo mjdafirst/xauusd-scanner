@@ -22,6 +22,7 @@ import technicals
 import news
 import notifier
 import state as state_mod
+import execution
 
 
 def run_once():
@@ -61,6 +62,13 @@ def run_once():
     message = notifier.format_signal_message(signal)
     notifier.send_telegram_message(message)
     print(f"Signal sent: {signal['direction']} @ {signal['price']:.2f}")
+
+    order_result = execution.place_trade(signal)
+    if order_result is not None:
+        notifier.send_telegram_message(
+            f"✅ Trade placed on OANDA ({config.OANDA_ENVIRONMENT}): "
+            f"{signal['direction']} {config.OANDA_INSTRUMENT}"
+        )
 
     st = state_mod.update_state_after_scan(signal, st)
     state_mod.save_state(st)

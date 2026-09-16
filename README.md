@@ -152,14 +152,75 @@ Options once you're happy with it:
 
 ## Roadmap to auto-trading
 
-This version only alerts. To place trades automatically later:
-1. Open a broker account with an API (OANDA's REST API is a common starting
-   point and has a free demo/practice environment)
-2. Add an `execution.py` module that takes a `signal` dict and places an
-   order via the broker's API
-3. Call it from `scanner.py` in place of (or alongside) the Telegram alert
-4. **Paper-trade / demo-trade extensively** before connecting to a live
-   account — the signal logic here has not been back-tested or validated
+This scanner can now place trades automatically on an OANDA practice
+account — see the "Auto-trading on OANDA" section below for setup. The
+groundwork (`execution.py`) is written so a live account would only need
+the environment/safety flags changed, not new code — but read the safety
+notes below before ever considering that.
+
+## Auto-trading on OANDA (demo account)
+
+This is optional and off by default — the scanner works exactly as before
+(alerts only) until you explicitly turn this on.
+
+### Setup
+
+1. **Create a free OANDA practice account**: go to oanda.com → sign up for
+   a demo/practice account (this uses fake money against real live prices,
+   free, no cost or card required)
+2. **Generate an API token**: on your OANDA account page, go to
+   **Manage API Access** and generate a personal access token
+3. **Find your account ID**: shown on the same page / your account
+   dashboard, looks like `101-001-12345678-001`
+4. **Add two more GitHub secrets** (same place as your Telegram ones):
+   - `OANDA_API_TOKEN` → your token
+   - `OANDA_ACCOUNT_ID` → your account ID
+5. **Flip the switch**: open `.github/workflows/scan.yml` in your repo,
+   find the line `AUTO_TRADE_ENABLED: "false"` and change it to `"true"`,
+   then commit. This is deliberately a manual step, separate from adding
+   credentials, so auto-trading never turns on by accident.
+
+Once enabled, every signal that clears the news filter and cooldown will
+also open a market order on your OANDA practice account, with the same
+stop-loss and take-profit the Telegram alert shows. You'll get a second
+Telegram message confirming the trade was placed.
+
+### Safety guards built in
+
+- `AUTO_TRADE_ENABLED` defaults to `"false"` — adding OANDA credentials
+  alone does not start trading
+- The scanner **refuses to place any order** if `OANDA_ENVIRONMENT` isn't
+  `"practice"`, unless `ALLOW_LIVE_TRADING` is also explicitly set to
+  `"true"` — this exists specifically so a future mistake (a typo, a
+  copy-pasted live token, forgetting this is wired up) can't silently
+  start trading real money
+- A failed order never crashes the scanner or blocks alerts — execution
+  errors are logged and swallowed, not raised
+
+### Position sizing
+
+By default every trade uses a fixed `TRADE_UNITS` (10, roughly 10 troy
+ounces of exposure on XAU_USD — check this against your practice account's
+balance and adjust to something sensible for its size). Set
+`USE_RISK_BASED_SIZING: "true"` in the workflow to instead size each trade
+so it risks a fixed `RISK_PER_TRADE_PERCENT` of account balance based on
+the ATR stop distance — more realistic, but depends on successfully
+fetching your account balance from OANDA each run.
+
+### Before you trust this with anything
+
+- This connects to a **practice account with fake money** — treat the
+  first weeks of auto-trading as *watching whether the strategy holds up
+  in real time*, not as a system to rely on
+- Nothing about auto-execution changes whether the underlying strategy is
+  good — run `backtest.py` first, and keep watching real results before
+  ever considering a live account
+- If you do eventually consider a live account: that trades real money on
+  your behalf, unattended, based on rules you may not have fully stress
+  tested — go in with realistic expectations. This project doesn't include
+  the kind of production-grade safeguards a real automated trading system
+  would need (position limits, drawdown circuit breakers, order
+  reconciliation, monitoring/alerting, redundancy).
 
 ## Disclaimer
 
