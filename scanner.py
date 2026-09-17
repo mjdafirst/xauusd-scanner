@@ -19,10 +19,17 @@ from datetime import datetime
 
 import config
 import technicals
+import smc
 import news
 import notifier
 import state as state_mod
 import execution
+
+
+def select_signal(df, htf_trend):
+    if config.STRATEGY_MODE == "smc":
+        return smc.detect_smc_signal(df, htf_trend=htf_trend)
+    return technicals.detect_signal(df, htf_trend=htf_trend)
 
 
 def run_once():
@@ -33,7 +40,7 @@ def run_once():
     if htf_trend:
         print(f"HTF trend: {htf_trend}")
 
-    signal = technicals.detect_signal(df, htf_trend=htf_trend)
+    signal = select_signal(df, htf_trend)
 
     if not signal:
         print("No signal this scan.")

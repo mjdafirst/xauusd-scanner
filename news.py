@@ -53,18 +53,25 @@ def relevant_events(events):
 
 def in_news_blackout(events, now=None):
     """
-    Returns (bool, event_or_None) — True if `now` falls within
-    NEWS_BLACKOUT_MINUTES of any relevant event.
+    Returns (bool, event_or_None) — True if `now` falls within the
+    blackout window of any relevant event. FOMC/rate-decision events get a
+    longer window (config.FOMC_BLACKOUT_MINUTES) than other high-impact
+    events (config.NEWS_BLACKOUT_MINUTES), since they tend to move gold
+    more violently and for longer.
     """
     if now is None:
         now = datetime.now(timezone.utc)
-
-    window = timedelta(minutes=config.NEWS_BLACKOUT_MINUTES)
 
     for e in relevant_events(events):
         event_time = e["date"]
         if event_time.tzinfo is None:
             event_time = event_time.replace(tzinfo=timezone.utc)
+
+        title_lower = e["title"].lower()
+        is_fomc = any(kw in title_lower for kw in config.FOMC_KEYWORDS)
+        window_minutes = config.FOMC_BLACKOUT_MINUTES if is_fomc else config.NEWS_BLACKOUT_MINUTES
+        window = timedelta(minutes=window_minutes)
+
         if abs((now - event_time)) <= window:
             return True, e
 

@@ -128,7 +128,54 @@ filter, so treat it as a sanity check on the entry logic — not a precise
 P&L forecast — and remember a good backtest still doesn't guarantee future
 results.
 
-## Tuning the strategy
+## Strategy: Smart Money Concepts (default) vs. breakout
+
+As of this version, the scanner supports two strategies, switched via
+`STRATEGY_MODE` in `config.py` ("smc" or "breakout"):
+
+**"smc" (default)** — models a popular retail framework often called
+Smart Money Concepts / ICT: Accumulation → Manipulation → Distribution.
+A signal requires all of:
+1. **Liquidity sweep**: price wicks through a recent swing high/low (where
+   stop-losses tend to rest) but closes back on the other side — read as
+   a stop-hunt rather than a genuine break
+2. **Fair Value Gap**: the reversal away from the sweep leaves a 3-candle
+   imbalance, the signature of an aggressive/impulsive move
+3. **Retracement entry**: price pulls back into that gap, which is where
+   the signal actually fires
+4. **Minimum reward:risk**: the trade is rejected outright unless the
+   distance to the nearest untouched opposing liquidity (the target)
+   beats `MIN_RISK_REWARD` (default 1:2) versus the sweep's extreme (the
+   stop) — a poor R:R setup never generates an alert, no matter how clean
+   the pattern looks
+
+**"breakout"** — the original, simpler support/resistance + EMA trend +
+RSI + ATR approach from earlier versions. Still available and still works;
+switch back to it any time by setting `STRATEGY_MODE = "breakout"`.
+
+**Honest framing**: SMC/ICT concepts are widely used in retail trading
+communities but don't have rigorous academic backing — there's no proof
+this framework has a real edge over a simpler one. This implementation is
+a faithful mechanical version of the concepts as commonly described, not
+a guarantee of better results. Backtest both modes and compare before
+trusting either.
+
+### Tuning the SMC strategy
+
+- `SWING_LEFT` / `SWING_RIGHT` — how many bars on each side confirm a
+  swing high/low (2/2 is a tight, sensitive definition)
+- `SWEEP_LOOKBACK_BARS` — how far back to look for a swing point that
+  could have been swept
+- `FVG_SEARCH_BARS` — how far back to look for a qualifying fair value gap
+- `TARGET_SEARCH_BARS` — how far back to look for the nearest untouched
+  opposing liquidity to use as the target
+- `SMC_STOP_BUFFER_ATR_MULT` — extra cushion beyond the sweep's wick, in
+  ATR multiples, so the stop isn't sitting exactly on the exact wick tip
+- `MIN_RISK_REWARD` — the hard minimum; raise this to be far more
+  selective (fewer, higher-quality signals), lower it cautiously since
+  going much below 1:1.5 starts eroding the whole point of the filter
+
+## Tuning the strategy (breakout mode)
 
 Everything is in `config.py`:
 - `SR_LOOKBACK_BARS` — how many candles define "recent" support/resistance

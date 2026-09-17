@@ -26,6 +26,13 @@ import yfinance as yf
 
 import config
 import technicals
+import smc
+
+
+def select_signal(window, htf_trend=None):
+    if config.STRATEGY_MODE == "smc":
+        return smc.detect_smc_signal(window, htf_trend=htf_trend)
+    return technicals.detect_signal(window, htf_trend=htf_trend)
 
 
 def fetch_backtest_data(interval, period):
@@ -40,18 +47,26 @@ def fetch_backtest_data(interval, period):
 def simulate(df, max_hold_bars):
     """
     Walks through the historical data bar by bar, re-using the exact same
-    detect_signal() logic the live scanner uses (no higher-timeframe filter
-    here, to keep the backtest self-contained on one dataset — results will
-    be somewhat more permissive than live trading, which does apply it).
+    signal-detection logic the live scanner uses (whichever strategy is
+    selected via config.STRATEGY_MODE), with no higher-timeframe filter
+    here to keep the backtest self-contained on one dataset — live trading,
+    which does apply the HTF filter, will likely be more selective than
+    this backtest.
     """
-    df = technicals.compute_indicators(df)
+    df = technicals.compute_indicators(df)  # adds RSI/EMA/ATR columns used by both strategies
     trades = []
 
-    min_bars = max(config.SR_LOOKBACK_BARS, config.EMA_SLOW, config.ATR_PERIOD) + 2
+    if config.STRATEGY_MODE == "smc":
+        min_bars = (
+            config.SWING_LEFT + config.SWING_RIGHT
+            + config.SWEEP_LOOKBACK_BARS + config.FVG_SEARCH_BARS + config.ATR_PERIOD + 5
+        )
+    else:
+        min_bars = max(config.SR_LOOKBACK_BARS, config.EMA_SLOW, config.ATR_PERIOD) + 2
 
     for i in range(min_bars, len(df) - 1):
         window = df.iloc[: i + 1]  # only data "known" up to this point, no lookahead
-        signal = technicals.detect_signal(window)
+        signal = select_signal(window)
         if not signal:
             continue
 
@@ -60,6 +75,10 @@ def simulate(df, max_hold_bars):
         target = signal["target"]
         direction = signal["direction"]
         entry_time = df.index[i - 1]  # detect_signal looks at iloc[-2] of the window
+
+        risk = abs(entry_price - stop)
+        reward = abs(target - entry_price)
+        planned_rr = reward / risk if risk > 0 else None
 
         outcome = "no_hit"
         exit_price = None
@@ -86,6 +105,7 @@ def simulate(df, max_hold_bars):
             "entry": entry_price,
             "stop": stop,
             "target": target,
+            "planned_rr": planned_rr,
             "outcome": outcome,
         })
 
@@ -99,23 +119,36 @@ def summarize(trades):
         return
 
     total = len(trades)
-    wins = sum(1 for t in trades if t["outcome"] == "target")
-    losses = sum(1 for t in trades if t["outcome"] == "stop")
+    wins = [t for t in trades if t["outcome"] == "target"]
+    losses = [t for t in trades if t["outcome"] == "stop"]
     no_hit = sum(1 for t in trades if t["outcome"] == "no_hit")
 
-    decided = wins + losses
-    win_rate = (wins / decided * 100) if decided else 0.0
+    decided = len(wins) + len(losses)
+    win_rate = (len(wins) / decided * 100) if decided else 0.0
 
-    r_multiple = config.ATR_TARGET_MULT / config.ATR_STOP_MULT
-    expectancy_r = (win_rate / 100 * r_multiple) - ((100 - win_rate) / 100 * 1)
+    rr_values = [t["planned_rr"] for t in trades if t["planned_rr"] is not None]
+    avg_rr = sum(rr_values) / len(rr_values) if rr_values else 0.0
 
-    print(f"\n--- Backtest summary ({config.TICKER}) ---")
+    # Expectancy in R: a win nets its own planned R:R, a loss costs exactly
+    # 1R by definition (the stop distance). This correctly handles
+    # strategies where R:R varies trade-to-trade (like the SMC strategy),
+    # not just a strategy with one fixed ratio for every trade.
+    decided_trades = wins + losses
+    r_outcomes = []
+    for t in decided_trades:
+        if t["outcome"] == "target" and t["planned_rr"] is not None:
+            r_outcomes.append(t["planned_rr"])
+        elif t["outcome"] == "stop":
+            r_outcomes.append(-1.0)
+    expectancy_r = sum(r_outcomes) / len(r_outcomes) if r_outcomes else 0.0
+
+    print(f"\n--- Backtest summary ({config.TICKER}, strategy={config.STRATEGY_MODE}) ---")
     print(f"Total signals:     {total}")
-    print(f"Hit target:        {wins}")
-    print(f"Hit stop:          {losses}")
+    print(f"Hit target:        {len(wins)}")
+    print(f"Hit stop:          {len(losses)}")
     print(f"No hit in window:  {no_hit}")
     print(f"Win rate (decided): {win_rate:.1f}%")
-    print(f"Reward:risk ratio:  1:{r_multiple:.2f}")
+    print(f"Avg planned R:R:    1:{avg_rr:.2f}")
     print(f"Expectancy:        {expectancy_r:+.2f}R per trade (rough, excludes fees/slippage/no_hit trades)")
     print("\nBreakdown by direction:")
     for direction in ("LONG", "SHORT"):
