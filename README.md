@@ -91,8 +91,9 @@ your phone, with nothing installed locally.
 
 ## How it works
 
-- **Price data**: pulled from Yahoo Finance (`GC=F`, gold futures) every
-  `SCAN_INTERVAL_MINUTES` (default 15 min). No API key required.
+- **Price data**: pulled directly from your OANDA account's own feed by
+  default (see "Price data: OANDA vs. yfinance fallback" below) every
+  `SCAN_INTERVAL_MINUTES` (default 15 min).
 - **Technicals**: breakout above/below a rolling support/resistance range,
   confirmed by 20/50 EMA trend direction and filtered by RSI so it doesn't
   fire into already-overbought/oversold moves.
@@ -111,6 +112,25 @@ your phone, with nothing installed locally.
   that breaks technical setups.
 - **Alerts**: sent to Telegram with entry, stop, target, and the reasoning
   behind the signal.
+
+## Price data: OANDA vs. yfinance fallback
+
+Live scans pull price data directly from your OANDA account's own feed
+(`PRICE_SOURCE = "oanda"`, the default) instead of Yahoo Finance's `GC=F`
+gold futures ticker. This matters because `GC=F` is a *futures* contract,
+not spot XAUUSD — it trades at a small but real premium/discount to spot
+that varies with time-to-expiry and rates, which is why an alert's entry
+price could look a little off versus OANDA's own XAU/USD chart at that
+moment. Pulling from OANDA directly removes that gap: the scanner now
+looks at (approximately) the same price your trades actually fill at.
+
+If `OANDA_API_TOKEN` isn't set, or OANDA's API is briefly unreachable, the
+scanner automatically falls back to the old `GC=F` yfinance path rather
+than failing the scan — this is an upgrade when available, never a hard
+requirement. `backtest.py` still uses `GC=F` via yfinance for historical
+data regardless of this setting, since OANDA's own historical candle
+history is comparably limited and this keeps backtest results directly
+comparable to earlier runs in this README.
 
 ## Backtesting before you trust it
 

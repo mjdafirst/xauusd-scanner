@@ -15,9 +15,16 @@ TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "PUT_YOUR_BOT_TOKEN_HE
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "PUT_YOUR_CHAT_ID_HERE")
 
 # --- Data ---
-TICKER = "GC=F"          # Gold futures (proxy for XAUUSD). Swap for a broker feed later if needed.
-CANDLE_INTERVAL = "15m"  # yfinance interval: 1m,2m,5m,15m,30m,60m,1d ...
-LOOKBACK_PERIOD = "5d"   # how much history to pull each scan
+TICKER = "GC=F"          # Gold futures (fallback proxy if OANDA is unavailable).
+CANDLE_INTERVAL = "15m"  # interval: 1m,2m,5m,15m,30m,60m,1d ...
+LOOKBACK_PERIOD = "5d"   # how much history to pull each scan (yfinance fallback only)
+
+# Where live scan price data comes from. "oanda" (default) pulls straight
+# from your OANDA account's own price feed — the actual price your trades
+# would fill at, avoiding the gap between GC=F futures and real spot
+# XAUUSD. Falls back to yfinance automatically if OANDA is unreachable or
+# OANDA_API_TOKEN isn't set. Set to "yfinance" to force the old behavior.
+PRICE_SOURCE = os.environ.get("PRICE_SOURCE", "oanda")
 
 # --- Technical parameters ---
 SR_LOOKBACK_BARS = 20        # bars used to define recent support/resistance

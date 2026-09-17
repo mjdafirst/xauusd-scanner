@@ -8,6 +8,7 @@ import pandas as pd
 import yfinance as yf
 
 import config
+import oanda_price
 
 
 def _flatten_columns(df):
@@ -19,7 +20,20 @@ def _flatten_columns(df):
 
 
 def fetch_price_data():
-    """Returns the main-timeframe OHLCV DataFrame, or None on failure."""
+    """Returns the main-timeframe OHLCV DataFrame, or None on failure.
+
+    Uses OANDA's own price feed when config.PRICE_SOURCE is "oanda" (the
+    default) — this is the actual price your trades would fill at, and
+    avoids the small but real gap between GC=F futures and spot XAUUSD.
+    Falls back to yfinance if OANDA is unavailable or unconfigured, so a
+    missing token doesn't stop the scanner from running.
+    """
+    if getattr(config, "PRICE_SOURCE", "oanda") == "oanda":
+        df = oanda_price.fetch_candles(config.CANDLE_INTERVAL, count=300)
+        if df is not None and not df.empty:
+            return df
+        print("[technicals] OANDA price fetch failed or unavailable — falling back to yfinance (GC=F).")
+
     try:
         df = yf.download(
             tickers=config.TICKER,
@@ -44,6 +58,19 @@ def fetch_htf_trend():
     (None means unknown/unavailable — callers should treat that as
     "don't filter" rather than blocking every signal).
     """
+    if getattr(config, "PRICE_SOURCE", "oanda") == "oanda":
+        df = oanda_price.fetch_candles(config.HTF_INTERVAL, count=200)
+        if df is not None and not df.empty and len(df) >= config.EMA_SLOW + 2:
+            ema_fast = df["Close"].ewm(span=config.EMA_FAST, adjust=False).mean()
+            ema_slow = df["Close"].ewm(span=config.EMA_SLOW, adjust=False).mean()
+            last_fast, last_slow = ema_fast.iloc[-2], ema_slow.iloc[-2]
+            if last_fast > last_slow:
+                return "up"
+            if last_fast < last_slow:
+                return "down"
+            return None
+        print("[technicals] OANDA HTF fetch failed or insufficient data — falling back to yfinance.")
+
     try:
         df = yf.download(
             tickers=config.TICKER,
