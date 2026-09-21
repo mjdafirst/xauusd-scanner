@@ -1,0 +1,16 @@
+{
+  "version": "champion-1",
+  "status": "champion",
+  "parameters": {
+    "EMA_FAST": 20,
+    "EMA_SLOW": 50,
+    "ATR_STOP_MULT": 1.5,
+    "ATR_TARGET_MULT": 2.5,
+    "SWEEP_LOOKBACK_BARS": 40,
+    "FVG_SEARCH_BARS": 25,
+    "MAX_SWEEP_AGE_BARS": 20,
+    "SMC_STOP_BUFFER_ATR_MULT": 0.25,
+    "MIN_RISK_REWARD": 1.3
+  },
+  "validation": {"trades": 0, "expectancy_r": 0.0, "max_drawdown_r": 0.0}
+}

@@ -1,131 +1,98 @@
-"""
-Configuration for the XAUUSD scanner.
-
-Telegram credentials are read from environment variables so they can be
-stored as GitHub Actions secrets (never hardcoded/committed to the repo).
-For local testing, you can instead export them in your shell:
-    export TELEGRAM_BOT_TOKEN="123456:ABC..."
-    export TELEGRAM_CHAT_ID="987654321"
-"""
-
+import json
 import os
+import uuid
+from datetime import datetime, timezone
+import config
 
-# --- Telegram ---
-TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "PUT_YOUR_BOT_TOKEN_HERE")
-TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "PUT_YOUR_CHAT_ID_HERE")
 
-# --- Data ---
-TICKER = "GC=F"          # Gold futures (fallback proxy if OANDA is unavailable).
-CANDLE_INTERVAL = "5m"   # interval: 1m,2m,5m,15m,30m,60m,1d ... (shorter = more setups/hour)
-LOOKBACK_PERIOD = "5d"   # how much history to pull each scan (yfinance fallback only)
+def _default():
+    return {"open_signals": [], "bucket_stats": {}, "last_daily_summary_date": None}
 
-# Where live scan price data comes from. "oanda" (default) pulls straight
-# from your OANDA account's own price feed — the actual price your trades
-# would fill at, avoiding the gap between GC=F futures and real spot
-# XAUUSD. Falls back to yfinance automatically if OANDA is unreachable or
-# OANDA_API_TOKEN isn't set. Set to "yfinance" to force the old behavior.
-PRICE_SOURCE = os.environ.get("PRICE_SOURCE", "oanda")
 
-# --- Technical parameters ---
-SR_LOOKBACK_BARS = 20        # bars used to define recent support/resistance
-RSI_PERIOD = 14
-RSI_OVERBOUGHT = 70
-RSI_OVERSOLD = 30
-EMA_FAST = 20
-EMA_SLOW = 50
+def load_state():
+    try:
+        with open(config.LEARNING_STATE_FILE) as f:
+            value = json.load(f)
+        if isinstance(value, dict):
+            value.setdefault("open_signals", []); value.setdefault("bucket_stats", {})
+            value.setdefault("last_daily_summary_date", None)
+            return value
+    except (OSError, ValueError):
+        pass
+    return _default()
 
-# --- Volatility-based stops/targets ---
-ATR_PERIOD = 14
-ATR_STOP_MULT = 1.5    # stop = entry -/+ ATR * this multiple
-ATR_TARGET_MULT = 2.5  # target = entry +/- ATR * this multiple (gives a >1:1 reward:risk)
 
-# --- Higher-timeframe trend filter ---
-# Only take a breakout if the bigger-picture trend agrees, to cut down on
-# breakouts that immediately fail because they're against the larger trend.
-HTF_INTERVAL = "1h"
-HTF_LOOKBACK_PERIOD = "30d"
+def save_state(state):
+    with open(config.LEARNING_STATE_FILE, "w") as f:
+        json.dump(state, f, indent=2)
 
-# --- Signal cooldown / state ---
-# Prevents re-alerting every scan while price stays extended beyond the
-# breakout level — you get one alert per breakout "episode," not one every
-# 15 minutes for as long as the move continues.
-STATE_FILE = "state.json"
 
-# --- Adaptive learning (conservative, demo-safe) ---
-# This does not rewrite the strategy itself. It simply filters out setup
-# categories that have shown poor historical expectancy after enough trade
-# samples, so you get a safer, more selective scanner over time.
-LEARNING_ENABLED = os.environ.get("LEARNING_ENABLED", "true").lower() == "true"
-LEARNING_STATE_FILE = "learning_state.json"
-MIN_LEARNING_SAMPLES = int(os.environ.get("MIN_LEARNING_SAMPLES", "20"))
-LEARNING_EXPECTANCY_THRESHOLD = float(os.environ.get("LEARNING_EXPECTANCY_THRESHOLD", "-0.10"))
-LEARNING_WINRATE_THRESHOLD = float(os.environ.get("LEARNING_WINRATE_THRESHOLD", "0.35"))
-MAX_SIGNAL_AGE_BARS = int(os.environ.get("MAX_SIGNAL_AGE_BARS", "96"))
+def _key(signal, trend):
+    return f"{config.STRATEGY_MODE}|{signal['direction']}|{trend or 'unknown'}"
 
-# --- OANDA (auto-trading on a demo account) ---
-# AUTO_TRADE_ENABLED is the master switch. Leave it "true" while you are
-# testing on a demo account and want the scanner to place trades on your
-# behalf automatically.
-AUTO_TRADE_ENABLED = os.environ.get("AUTO_TRADE_ENABLED", "true").lower() == "true"
 
-OANDA_API_TOKEN = os.environ.get("OANDA_API_TOKEN", "")
-OANDA_ACCOUNT_ID = os.environ.get("OANDA_ACCOUNT_ID", "")
-OANDA_ENVIRONMENT = os.environ.get("OANDA_ENVIRONMENT", "practice")  # "practice" or "live"
-OANDA_INSTRUMENT = "XAU_USD"
+def register_open_signal(signal, trend, order_result):
+    if not config.LEARNING_ENABLED or not order_result:
+        return None
+    state = load_state()
+    item = {"id": str(uuid.uuid4()), "direction": signal["direction"],
+            "price": float(signal["price"]), "stop": float(signal["stop"]),
+            "target": float(signal["target"]), "bucket_key": _key(signal, trend),
+            "age_bars": 0, "created_at": datetime.now(timezone.utc).isoformat()}
+    state["open_signals"].append(item)
+    save_state(state)
+    return item["id"]
 
-# Safety switch: even if AUTO_TRADE_ENABLED is on, the scanner refuses to
-# place any order unless OANDA_ENVIRONMENT is "practice" OR this is
-# explicitly set to true. This exists so a demo setup can never silently
-# start trading a live account by mistake (e.g. a typo, a copy-pasted
-# token, or a future you forgetting this was ever wired up).
-ALLOW_LIVE_TRADING = os.environ.get("ALLOW_LIVE_TRADING", "false").lower() == "true"
 
-# --- Position sizing ---
-# Fixed size used unless USE_RISK_BASED_SIZING is on. OANDA XAU_USD units
-# are roughly troy ounces — 10 units is a small, demo-appropriate size.
-TRADE_UNITS = int(os.environ.get("TRADE_UNITS", "10"))
+def _outcome(item, bar):
+    long = item["direction"] == "LONG"
+    stop = bar["Low"] <= item["stop"] if long else bar["High"] >= item["stop"]
+    target = bar["High"] >= item["target"] if long else bar["Low"] <= item["target"]
+    # Conservative tie-break: if one OHLC bar touched both levels, count stop.
+    if stop: return "stop"
+    if target: return "target"
+    return None
 
-# If enabled, position size is calculated from account balance and the
-# signal's stop distance instead of using a fixed size, so each trade
-# risks roughly the same percentage of the account regardless of how far
-# away the ATR-based stop happens to be.
-USE_RISK_BASED_SIZING = os.environ.get("USE_RISK_BASED_SIZING", "false").lower() == "true"
-RISK_PER_TRADE_PERCENT = float(os.environ.get("RISK_PER_TRADE_PERCENT", "1.0"))
 
-# --- Strategy selection ---
-# "smc"      = Smart Money Concepts: liquidity sweep + market structure +
-#              fair value gap retracement (see smc.py)
-# "breakout" = the original support/resistance breakout (see technicals.py)
-STRATEGY_MODE = os.environ.get("STRATEGY_MODE", "smc")
+def update_open_signals(df):
+    if not config.LEARNING_ENABLED or df is None or len(df) < 2:
+        return
+    state = load_state(); remaining = []
+    # Process the newest completed candle only; age represents scanner runs.
+    bar = df.iloc[-2]
+    for item in state["open_signals"]:
+        result = _outcome(item, bar)
+        if result:
+            stats = state["bucket_stats"].setdefault(item["bucket_key"],
+                {"trades": 0, "wins": 0, "losses": 0, "expired": 0, "expectancy_sum": 0.0})
+            stats["trades"] += 1
+            stats["wins"] += result == "target"; stats["losses"] += result == "stop"
+            risk = abs(item["price"] - item["stop"])
+            r = abs(item["target"] - item["price"]) / risk if result == "target" and risk else -1.0
+            stats["expectancy_sum"] += r
+        else:
+            item["age_bars"] += 1
+            if item["age_bars"] < config.MAX_SIGNAL_AGE_BARS:
+                remaining.append(item)
+            else:
+                stats = state["bucket_stats"].setdefault(item["bucket_key"],
+                    {"trades": 0, "wins": 0, "losses": 0, "expired": 0, "expectancy_sum": 0.0})
+                stats["trades"] += 1; stats["expired"] += 1
+    state["open_signals"] = remaining; save_state(state)
 
-# --- Smart Money Concepts (smc.py) parameters ---
-SWING_LEFT = 1                  # bars on each side required to confirm a swing high/low
-SWING_RIGHT = 1
-SWING_LOOKBACK_BARS = 80       # how far back to scan for swing points
-SWEEP_LOOKBACK_BARS = 40       # how far back to look for a swing point that got swept
-FVG_SEARCH_BARS = 25           # how far back to look for a qualifying fair value gap
-TARGET_SEARCH_BARS = 50        # how far back to look for the nearest opposing liquidity (target)
-MAX_SWEEP_AGE_BARS = 20        # reject stale sweeps that are too old to be considered active
-SMC_STOP_BUFFER_ATR_MULT = 0.25 # extra buffer beyond the sweep's wick, in ATR multiples
-MIN_RISK_REWARD = float(os.environ.get("MIN_RISK_REWARD", "1.3"))  # trades below this R:R are rejected
 
-# Inverse Fair Value Gap: when a normal FVG gets fully broken through
-# (price closes all the way past it), that same zone flips polarity and
-# can act as a reversal zone in the opposite direction. Set to False to
-# only trade FVGs in their original direction.
-ENABLE_INVERSE_FVG = os.environ.get("ENABLE_INVERSE_FVG", "true").lower() == "true"
+def should_block_signal(signal, trend):
+    if not config.LEARNING_ENABLED: return False
+    stats = load_state()["bucket_stats"].get(_key(signal, trend))
+    if not stats or stats.get("trades", 0) < config.MIN_LEARNING_SAMPLES: return False
+    n = stats["trades"]; expectancy = stats["expectancy_sum"] / n
+    win_rate = stats.get("wins", 0) / n
+    return expectancy <= config.LEARNING_EXPECTANCY_THRESHOLD or win_rate <= config.LEARNING_WINRATE_THRESHOLD
 
-# --- News: extra-cautious window for the highest-impact event types ---
-# FOMC/rate decisions tend to move gold more violently and for longer than
-# an average "High" impact event, so they get a wider blackout window.
-FOMC_KEYWORDS = ["fomc", "interest rate", "rate decision", "press conference", "fed chair"]
-FOMC_BLACKOUT_MINUTES = int(os.environ.get("FOMC_BLACKOUT_MINUTES", "60"))
 
-# --- News filter ---
-NEWS_BLACKOUT_MINUTES = 30   # suppress signals this many minutes before/after high-impact news
-NEWS_IMPACT_LEVELS = ["High"]  # which impact levels count ("High", "Medium", "Low")
-FOREXFACTORY_CALENDAR_URL = "https://nfs.faireconomy.media/ff_calendar_thisweek.json"
-
-# --- Scan cadence ---
-SCAN_INTERVAL_MINUTES = 15   # how often the scanner runs
-
+def summary():
+    rows = []
+    for key, s in load_state()["bucket_stats"].items():
+        n = s.get("trades", 0)
+        if n: rows.append(f"{key}: {n} trades, {s.get('wins',0)/n:.1%} wins, {s.get('expectancy_sum',0)/n:+.2f}R")
+    return "\n".join(rows) if rows else "No completed samples yet."

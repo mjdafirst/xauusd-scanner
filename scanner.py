@@ -1,208 +1,42 @@
-import json
-import os
-from datetime import datetime
-
-import config
-
-
-def default_state():
-    return {
-        "open_signals": [],
-        "bucket_stats": {},
-        "last_daily_summary_date": None,
-    }
+import sys
+import time
+from datetime import datetime, timezone
+import adaptive_filter, config, technicals, smc, news, notifier, state as state_mod, execution
 
 
-def load_state():
-    path = config.LEARNING_STATE_FILE
-    if not os.path.exists(path):
-        return default_state()
-    try:
-        with open(path, "r") as f:
-            state = json.load(f)
-        if not isinstance(state, dict):
-            return default_state()
-        state.setdefault("open_signals", [])
-        state.setdefault("bucket_stats", {})
-        state.setdefault("last_daily_summary_date", None)
-        return state
-    except Exception as e:
-        print(f"[adaptive_filter] Failed to read learning state: {e}")
-        return default_state()
+def select_signal(df, trend):
+    return smc.detect_smc_signal(df, htf_trend=trend) if config.STRATEGY_MODE == "smc" else technicals.detect_signal(df, htf_trend=trend)
 
 
-def save_state(state):
-    path = config.LEARNING_STATE_FILE
-    try:
-        with open(path, "w") as f:
-            json.dump(state, f, indent=2)
-    except Exception as e:
-        print(f"[adaptive_filter] Failed to write learning state: {e}")
-
-
-def _bucket_key(signal, htf_trend):
-    direction = signal["direction"]
-    trend = htf_trend if htf_trend else "unknown"
-    return f"{config.STRATEGY_MODE}|{direction}|{trend}"
-
-
-def _risk_multiple(signal, outcome):
-    risk = abs(signal["price"] - signal["stop"])
-    if risk <= 0:
-        return 0.0
-    if outcome == "target":
-        reward = abs(signal["target"] - signal["price"])
-        return reward / risk
-    if outcome == "stop":
-        return -1.0
-    return 0.0
-
-
-def _update_bucket_stats(state, key, signal, outcome):
-    stats = state["bucket_stats"].setdefault(key, {
-        "trades": 0,
-        "wins": 0,
-        "losses": 0,
-        "expired": 0,
-        "expectancy_sum": 0.0,
-    })
-
-    stats["trades"] += 1
-    if outcome == "target":
-        stats["wins"] += 1
-    elif outcome == "stop":
-        stats["losses"] += 1
-    elif outcome == "expired":
-        stats["expired"] += 1
-
-    stats["expectancy_sum"] += _risk_multiple(signal, outcome)
-    state["bucket_stats"][key] = stats
-
-
-def register_open_signal(signal, htf_trend):
-    if not config.LEARNING_ENABLED:
-        return None
-
-    state = load_state()
-    signal_id = str(__import__('uuid').uuid4())
-    state["open_signals"].append({
-        "id": signal_id,
-        "direction": signal["direction"],
-        "price": float(signal["price"]),
-        "stop": float(signal["stop"]),
-        "target": float(signal["target"]),
-        "bucket_key": _bucket_key(signal, htf_trend),
-        "age_bars": 0,
-        "created_at": datetime.utcnow().isoformat(),
-    })
-    save_state(state)
-    return signal_id
-
-
-def _resolve_signal(signal, current_price):
-    if signal["direction"] == "LONG":
-        if current_price >= signal["target"]:
-            return "target"
-        if current_price <= signal["stop"]:
-            return "stop"
+def run_once():
+    print(f"\n[{datetime.now(timezone.utc).isoformat()}] Running scan...")
+    df = technicals.fetch_price_data()
+    if df is None: return
+    adaptive_filter.update_open_signals(df)
+    trend = technicals.fetch_htf_trend()
+    signal = select_signal(df, trend)
+    if signal and adaptive_filter.should_block_signal(signal, trend):
+        print("Signal filtered by learned bucket performance."); return
+    if not signal:
+        state_mod.save_state(state_mod.update_state_after_scan(None, state_mod.load_state())); return
+    st = state_mod.load_state()
+    if not state_mod.should_alert(signal, st): return
+    blackout, event = news.in_news_blackout(news.fetch_calendar())
+    if blackout:
+        print(f"Signal suppressed by news: {event['title']}"); return
+    notifier.send_telegram_message(notifier.format_signal_message(signal))
+    result = execution.place_trade(signal)
+    if result is not None:
+        adaptive_filter.register_open_signal(signal, trend, result)
+        notifier.send_telegram_message(f"Trade placed on OANDA {config.OANDA_ENVIRONMENT}: {signal['direction']}")
     else:
-        if current_price <= signal["target"]:
-            return "target"
-        if current_price >= signal["stop"]:
-            return "stop"
-    return None
+        notifier.send_telegram_message("OANDA order was not confirmed; learning record was not opened.")
+    state_mod.save_state(state_mod.update_state_after_scan(signal, st))
 
-
-def update_open_signals(df):
-    if not config.LEARNING_ENABLED or df is None or len(df) < 2:
-        return
-
-    current_price = float(df["Close"].iloc[-2])
-    state = load_state()
-    remaining = []
-
-    for item in state["open_signals"]:
-        resolution = _resolve_signal(item, current_price)
-        if resolution is not None:
-            _update_bucket_stats(state, item["bucket_key"], item, resolution)
-            continue
-
-        item["age_bars"] += 1
-        if item["age_bars"] >= config.MAX_SIGNAL_AGE_BARS:
-            _update_bucket_stats(state, item["bucket_key"], item, "expired")
-        else:
-            remaining.append(item)
-
-    state["open_signals"] = remaining
-    save_state(state)
-
-
-def should_block_signal(signal, htf_trend=None):
-    if not config.LEARNING_ENABLED:
-        return False
-
-    state = load_state()
-    key = _bucket_key(signal, htf_trend)
-    stats = state["bucket_stats"].get(key)
-    if not stats:
-        return False
-
-    trades = stats.get("trades", 0)
-    if trades < config.MIN_LEARNING_SAMPLES:
-        return False
-
-    wins = stats.get("wins", 0)
-    win_rate = wins / trades
-    expectancy = stats.get("expectancy_sum", 0.0) / trades
-
-    if expectancy <= config.LEARNING_EXPECTANCY_THRESHOLD:
-        return True
-    if win_rate <= config.LEARNING_WINRATE_THRESHOLD and trades >= config.MIN_LEARNING_SAMPLES:
-        return True
-    return False
-
-
-def _format_bucket_summary():
-    state = load_state()
-    if not state["bucket_stats"]:
-        return "No completed learning samples yet."
-
-    rows = []
-    for key, stats in sorted(state["bucket_stats"].items(), key=lambda x: x[1]["trades"], reverse=True):
-        trades = stats["trades"]
-        wins = stats["wins"]
-        win_rate = (wins / trades) if trades else 0.0
-        expectancy = (stats["expectancy_sum"] / trades) if trades else 0.0
-        rows.append(f"{key}: trades={trades}, win_rate={win_rate:.2%}, expectancy={expectancy:+.2f}R")
-    return "\n".join(rows[:8])
-
-
-def maybe_send_daily_summary():
-    if not config.LEARNING_ENABLED:
-        return
-
-    today = datetime.utcnow().strftime("%Y-%m-%d")
-    state = load_state()
-    if state.get("last_daily_summary_date") == today:
-        return
-    if not state["bucket_stats"]:
-        state["last_daily_summary_date"] = today
-        save_state(state)
-        return
-
-    summary = _format_bucket_summary()
-    msg = (
-        "Learning summary\n"
-        f"Date: {today}\n"
-        f"{summary}"
-    )
-
-    try:
-        import notifier
-        notifier.send_telegram_message(msg)
-    except Exception as e:
-        print(f"[adaptive_filter] Failed to send daily learning summary: {e}")
-
-    state["last_daily_summary_date"] = today
-    save_state(state)
-
+if __name__ == "__main__":
+    if "--once" in sys.argv: run_once()
+    else:
+        while True:
+            try: run_once()
+            except Exception as exc: print(f"[scanner] {exc}")
+            time.sleep(config.SCAN_INTERVAL_MINUTES * 60)
