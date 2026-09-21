@@ -1,119 +1,208 @@
 """
-Configuration for the XAUUSD scanner.
+Smart Money Concepts (SMC) strategy: liquidity sweeps, market structure,
+and Fair Value Gap (FVG) retracement entries.
 
-Telegram credentials are read from environment variables so they can be
-stored as GitHub Actions secrets (never hardcoded/committed to the repo).
-For local testing, you can instead export them in your shell:
-    export TELEGRAM_BOT_TOKEN="123456:ABC..."
-    export TELEGRAM_CHAT_ID="987654321"
+This is a mechanical pattern heuristic, not a guarantee of trading performance.
 """
 
-import os
+import pandas as pd
 
-# --- Telegram ---
-TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "PUT_YOUR_BOT_TOKEN_HERE")
-TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "PUT_YOUR_CHAT_ID_HERE")
+import config
+import technicals
 
-# --- Data ---
-TICKER = "GC=F"          # Gold futures (fallback proxy if OANDA is unavailable).
-CANDLE_INTERVAL = "5m"   # interval: 1m,2m,5m,15m,30m,60m,1d ... (shorter = more setups/hour)
-LOOKBACK_PERIOD = "5d"   # how much history to pull each scan (yfinance fallback only)
 
-# Where live scan price data comes from. "oanda" (default) pulls straight
-# from your OANDA account's own price feed — the actual price your trades
-# would fill at, avoiding the gap between GC=F futures and real spot
-# XAUUSD. Falls back to yfinance automatically if OANDA is unreachable or
-# OANDA_API_TOKEN isn't set. Set to "yfinance" to force the old behavior.
-PRICE_SOURCE = os.environ.get("PRICE_SOURCE", "oanda")
+def find_swing_points(df, left=2, right=2, lookback_bars=80):
+    """Return confirmed swing highs and lows in the recent lookback window."""
+    start = max(left, len(df) - lookback_bars)
+    end = len(df) - right
+    swings = []
+    for i in range(start, end):
+        window_high = df["High"].iloc[i - left:i + right + 1]
+        window_low = df["Low"].iloc[i - left:i + right + 1]
+        if (df["High"].iloc[i] == window_high.max()
+                and (window_high == window_high.max()).sum() == 1):
+            swings.append({"idx": i, "price": df["High"].iloc[i], "type": "high"})
+        if (df["Low"].iloc[i] == window_low.min()
+                and (window_low == window_low.min()).sum() == 1):
+            swings.append({"idx": i, "price": df["Low"].iloc[i], "type": "low"})
+    return swings
 
-# --- Technical parameters ---
-SR_LOOKBACK_BARS = 20        # bars used to define recent support/resistance
-RSI_PERIOD = 14
-RSI_OVERBOUGHT = 70
-RSI_OVERSOLD = 30
-EMA_FAST = 20
-EMA_SLOW = 50
 
-# --- Volatility-based stops/targets ---
-ATR_PERIOD = 14
-ATR_STOP_MULT = 1.5    # stop = entry -/+ ATR * this multiple
-ATR_TARGET_MULT = 2.5  # target = entry +/- ATR * this multiple (gives a >1:1 reward:risk)
+def detect_liquidity_sweep(df, swings, lookback_bars):
+    """Find the most recent wick-through-and-close-back sweep."""
+    if not swings:
+        return None
 
-# --- Higher-timeframe trend filter ---
-# Only take a breakout if the bigger-picture trend agrees, to cut down on
-# breakouts that immediately fail because they're against the larger trend.
-HTF_INTERVAL = "1h"
-HTF_LOOKBACK_PERIOD = "30d"
+    recent_start = max(0, len(df) - lookback_bars)
+    best = None
+    for i in range(recent_start, len(df)):
+        bar = df.iloc[i]
+        prior_swings = [s for s in swings if s["idx"] < i]
+        prior_lows = [s for s in prior_swings if s["type"] == "low"]
+        prior_highs = [s for s in prior_swings if s["type"] == "high"]
 
-# --- Signal cooldown / state ---
-# Prevents re-alerting every scan while price stays extended beyond the
-# breakout level — you get one alert per breakout "episode," not one every
-# 15 minutes for as long as the move continues.
-STATE_FILE = "state.json"
+        if prior_lows:
+            swing_low = max(prior_lows, key=lambda s: s["idx"])
+            if bar["Low"] < swing_low["price"] and bar["Close"] > swing_low["price"]:
+                best = {
+                    "direction": "LONG",
+                    "sweep_idx": i,
+                    "swept_level": swing_low["price"],
+                    "sweep_extreme": bar["Low"],
+                }
 
-# --- OANDA (auto-trading on a demo account) ---
-# AUTO_TRADE_ENABLED is the master switch. Leave it "true" while you are
-# testing on a demo account and want the scanner to place trades on your
-# behalf automatically.
-AUTO_TRADE_ENABLED = os.environ.get("AUTO_TRADE_ENABLED", "true").lower() == "true"
+        if prior_highs:
+            swing_high = max(prior_highs, key=lambda s: s["idx"])
+            if bar["High"] > swing_high["price"] and bar["Close"] < swing_high["price"]:
+                best = {
+                    "direction": "SHORT",
+                    "sweep_idx": i,
+                    "swept_level": swing_high["price"],
+                    "sweep_extreme": bar["High"],
+                }
+    return best
 
-OANDA_API_TOKEN = os.environ.get("OANDA_API_TOKEN", "")
-OANDA_ACCOUNT_ID = os.environ.get("OANDA_ACCOUNT_ID", "")
-OANDA_ENVIRONMENT = os.environ.get("OANDA_ENVIRONMENT", "practice")  # "practice" or "live"
-OANDA_INSTRUMENT = "XAU_USD"
 
-# Safety switch: even if AUTO_TRADE_ENABLED is on, the scanner refuses to
-# place any order unless OANDA_ENVIRONMENT is "practice" OR this is
-# explicitly set to true. This exists so a demo setup can never silently
-# start trading a live account by mistake (e.g. a typo, a copy-pasted
-# token, or a future you forgetting this was ever wired up).
-ALLOW_LIVE_TRADING = os.environ.get("ALLOW_LIVE_TRADING", "false").lower() == "true"
+def confirm_momentum(df, sweep):
+    """Require a close beyond the sweep candle in the reversal direction."""
+    since = df.iloc[sweep["sweep_idx"] + 1:]
+    if len(since) == 0:
+        return False
+    sweep_bar = df.iloc[sweep["sweep_idx"]]
+    if sweep["direction"] == "LONG":
+        return since["Close"].max() > sweep_bar["High"]
+    return since["Close"].min() < sweep_bar["Low"]
 
-# --- Position sizing ---
-# Fixed size used unless USE_RISK_BASED_SIZING is on. OANDA XAU_USD units
-# are roughly troy ounces — 10 units is a small, demo-appropriate size.
-TRADE_UNITS = int(os.environ.get("TRADE_UNITS", "10"))
 
-# If enabled, position size is calculated from account balance and the
-# signal's stop distance instead of using a fixed size, so each trade
-# risks roughly the same percentage of the account regardless of how far
-# away the ATR-based stop happens to be.
-USE_RISK_BASED_SIZING = os.environ.get("USE_RISK_BASED_SIZING", "false").lower() == "true"
-RISK_PER_TRADE_PERCENT = float(os.environ.get("RISK_PER_TRADE_PERCENT", "1.0"))
+def find_fvgs(df, start_idx, direction):
+    """Find bullish or bearish three-candle fair value gaps."""
+    fvgs = []
+    for i in range(start_idx, len(df) - 2):
+        first = df.iloc[i]
+        third = df.iloc[i + 2]
+        if direction == "bullish" and first["High"] < third["Low"]:
+            fvgs.append({"low": first["High"], "high": third["Low"], "formed_idx": i + 2})
+        elif direction == "bearish" and first["Low"] > third["High"]:
+            fvgs.append({"low": third["High"], "high": first["Low"], "formed_idx": i + 2})
+    return fvgs
 
-# --- Strategy selection ---
-# "smc"      = Smart Money Concepts: liquidity sweep + market structure +
-#              fair value gap retracement (see smc.py)
-# "breakout" = the original support/resistance breakout (see technicals.py)
-STRATEGY_MODE = os.environ.get("STRATEGY_MODE", "smc")
 
-# --- Smart Money Concepts (smc.py) parameters ---
-SWING_LEFT = 1                  # bars on each side required to confirm a swing high/low
-SWING_RIGHT = 1
-SWING_LOOKBACK_BARS = 80       # how far back to scan for swing points
-SWEEP_LOOKBACK_BARS = 40       # how far back to look for a swing point that got swept
-FVG_SEARCH_BARS = 25           # how far back to look for a qualifying fair value gap
-TARGET_SEARCH_BARS = 50        # how far back to look for the nearest opposing liquidity (target)
-MAX_SWEEP_AGE_BARS = 20        # reject stale sweeps that are too old to be considered active
-SMC_STOP_BUFFER_ATR_MULT = 0.25 # extra buffer beyond the sweep's wick, in ATR multiples
-MIN_RISK_REWARD = float(os.environ.get("MIN_RISK_REWARD", "1.3"))  # trades below this R:R are rejected
+def is_fvg_unfilled(df, zone, direction, formed_idx):
+    """Reject gaps invalidated by later price action."""
+    for j in range(formed_idx, len(df)):
+        bar = df.iloc[j]
+        if direction == "bullish" and bar["Low"] <= zone["low"]:
+            return False
+        if direction == "bearish" and bar["High"] >= zone["high"]:
+            return False
+    return True
 
-# Inverse Fair Value Gap: when a normal FVG gets fully broken through
-# (price closes all the way past it), that same zone flips polarity and
-# can act as a reversal zone in the opposite direction. Set to False to
-# only trade FVGs in their original direction.
-ENABLE_INVERSE_FVG = os.environ.get("ENABLE_INVERSE_FVG", "true").lower() == "true"
 
-# --- News: extra-cautious window for the highest-impact event types ---
-# FOMC/rate decisions tend to move gold more violently and for longer than
-# an average "High" impact event, so they get a wider blackout window.
-FOMC_KEYWORDS = ["fomc", "interest rate", "rate decision", "press conference", "fed chair"]
-FOMC_BLACKOUT_MINUTES = int(os.environ.get("FOMC_BLACKOUT_MINUTES", "60"))
+def price_in_zone(price, zone):
+    return zone["low"] <= price <= zone["high"]
 
-# --- News filter ---
-NEWS_BLACKOUT_MINUTES = 30   # suppress signals this many minutes before/after high-impact news
-NEWS_IMPACT_LEVELS = ["High"]  # which impact levels count ("High", "Medium", "Low")
-FOREXFACTORY_CALENDAR_URL = "https://nfs.faireconomy.media/ff_calendar_thisweek.json"
 
-# --- Scan cadence ---
-SCAN_INTERVAL_MINUTES = 15   # how often the scanner runs
+def find_target(swings, direction, current_price, lookback_bars_idx_floor):
+    """Find the nearest opposing swing beyond the current price."""
+    if direction == "LONG":
+        candidates = [s["price"] for s in swings
+                      if s["type"] == "high" and s["price"] > current_price
+                      and s["idx"] >= lookback_bars_idx_floor]
+        return min(candidates) if candidates else None
+
+    candidates = [s["price"] for s in swings
+                  if s["type"] == "low" and s["price"] < current_price
+                  and s["idx"] >= lookback_bars_idx_floor]
+    return max(candidates) if candidates else None
+
+
+def detect_smc_signal(df, htf_trend=None):
+    """Return an SMC signal with direction, entry, stop, and target, or None."""
+    min_bars = max(getattr(config, "SWING_LOOKBACK_BARS", 80), config.ATR_PERIOD) + 10
+    if df is None or len(df) < min_bars:
+        return None
+
+    closed = df.iloc[:-1].copy()
+    if len(closed) < min_bars:
+        return None
+
+    ind = technicals.compute_indicators(closed)
+    atr = ind["ATR"].iloc[-1]
+    if pd.isna(atr) or atr <= 0:
+        return None
+
+    swings = find_swing_points(
+        closed,
+        left=config.SWING_LEFT,
+        right=config.SWING_RIGHT,
+        lookback_bars=getattr(config, "SWING_LOOKBACK_BARS", 80),
+    )
+    sweep = detect_liquidity_sweep(closed, swings, config.SWEEP_LOOKBACK_BARS)
+    if sweep is None:
+        return None
+
+    if len(closed) - 1 - sweep["sweep_idx"] > getattr(config, "MAX_SWEEP_AGE_BARS", 20):
+        return None
+    if not confirm_momentum(closed, sweep):
+        return None
+
+    direction = sweep["direction"]
+    if direction == "LONG" and htf_trend == "down":
+        return None
+    if direction == "SHORT" and htf_trend == "up":
+        return None
+
+    fvg_direction = "bullish" if direction == "LONG" else "bearish"
+    fvg_search_start = max(sweep["sweep_idx"], len(closed) - config.FVG_SEARCH_BARS)
+    fvgs = find_fvgs(closed, fvg_search_start, fvg_direction)
+    if not fvgs:
+        return None
+
+    last_price = closed["Close"].iloc[-1]
+    zone = None
+    for candidate in reversed(fvgs):
+        if (price_in_zone(last_price, candidate)
+                and is_fvg_unfilled(closed, candidate, fvg_direction, candidate["formed_idx"])):
+            zone = candidate
+            break
+    if zone is None:
+        return None
+
+    buffer = atr * config.SMC_STOP_BUFFER_ATR_MULT
+    target_floor_idx = max(0, len(closed) - config.TARGET_SEARCH_BARS)
+
+    if direction == "LONG":
+        stop = sweep["sweep_extreme"] - buffer
+        risk = last_price - stop
+        if risk <= 0:
+            return None
+        target = find_target(swings, "LONG", last_price, target_floor_idx)
+        min_target = last_price + risk * config.MIN_RISK_REWARD
+        if target is None or target < min_target:
+            target = min_target
+        reward = target - last_price
+    else:
+        stop = sweep["sweep_extreme"] + buffer
+        risk = stop - last_price
+        if risk <= 0:
+            return None
+        target = find_target(swings, "SHORT", last_price, target_floor_idx)
+        min_target = last_price - risk * config.MIN_RISK_REWARD
+        if target is None or target > min_target:
+            target = min_target
+        reward = last_price - target
+
+    if risk <= 0 or reward / risk < config.MIN_RISK_REWARD - 1e-6:
+        return None
+
+    return {
+        "direction": direction,
+        "price": last_price,
+        "reason": (
+            f"Liquidity sweep of {sweep['swept_level']:.2f}, momentum confirmed, "
+            f"entry on FVG retracement [{zone['low']:.2f}-{zone['high']:.2f}]"
+            + (f", HTF trend {htf_trend}" if htf_trend else "")
+        ),
+        "stop": stop,
+        "target": target,
+    }
