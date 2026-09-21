@@ -1,88 +1,113 @@
 """
-Fetches OHLC candles directly from OANDA for XAU_USD, so the scanner works
-off the same price OANDA would actually fill your trades at — removing the
-gap between GC=F futures and real spot XAUUSD.
+XAUUSD Scanner — main entry point.
 
-Returns data in the same shape technicals.py expects (a DataFrame with
-Open/High/Low/Close/Volume columns, oldest first), so it's a drop-in
-replacement for the yfinance path.
+Runs on a loop (or once, for scheduled cloud runs): fetches price data,
+the higher-timeframe trend, and the news calendar; checks for a technical
+signal; suppresses it if it's a duplicate of an already-active breakout or
+falls in a news blackout window; and sends a Telegram alert if a fresh,
+valid signal fires.
+
+Usage:
+    python scanner.py            # runs continuously
+    python scanner.py --once     # runs a single scan and exits (used by the
+                                   # GitHub Actions schedule / cron)
 """
 
-import requests
-import pandas as pd
+import sys
+import time
+from datetime import datetime
 
+import adaptive_filter
 import config
-
-BASE_URLS = {
-    "practice": "https://api-fxpractice.oanda.com",
-    "live": "https://api-fxtrade.oanda.com",
-}
-
-# Maps this project's interval strings to OANDA's granularity codes.
-GRANULARITY_MAP = {
-    "1m": "M1", "2m": "M2", "5m": "M5", "10m": "M10", "15m": "M15", "30m": "M30",
-    "1h": "H1", "4h": "H4", "1d": "D",
-}
+import technicals
+import smc
+import news
+import notifier
+import state as state_mod
+import execution
 
 
-def _base_url():
-    return BASE_URLS.get(config.OANDA_ENVIRONMENT, BASE_URLS["practice"])
+def select_signal(df, htf_trend):
+    if config.STRATEGY_MODE == "smc":
+        return smc.detect_smc_signal(df, htf_trend=htf_trend)
+    return technicals.detect_signal(df, htf_trend=htf_trend)
 
 
-def _headers():
-    return {"Authorization": f"Bearer {config.OANDA_API_TOKEN}"}
+def run_once():
+    print(f"\n[{datetime.now()}] Running scan...")
+
+    df = technicals.fetch_price_data()
+    if df is not None:
+        adaptive_filter.update_open_signals(df)
+
+    htf_trend = technicals.fetch_htf_trend()
+    if htf_trend:
+        print(f"HTF trend: {htf_trend}")
+
+    signal = select_signal(df, htf_trend)
+    if signal is not None and config.LEARNING_ENABLED and adaptive_filter.should_block_signal(signal, htf_trend):
+        print(f"Signal found ({signal['direction']}) but filtered out by adaptive learning bucket statistics.")
+        return
+
+    if not signal:
+        print("No signal this scan.")
+        st = state_mod.load_state()
+        st = state_mod.update_state_after_scan(None, st)
+        state_mod.save_state(st)
+        adaptive_filter.maybe_send_daily_summary()
+        return
+
+    st = state_mod.load_state()
+
+    if not state_mod.should_alert(signal, st):
+        print(f"Signal found ({signal['direction']}) but already alerted for this breakout — skipping duplicate.")
+        st = state_mod.update_state_after_scan(signal, st)
+        state_mod.save_state(st)
+        adaptive_filter.maybe_send_daily_summary()
+        return
+
+    calendar_events = news.fetch_calendar()
+    blackout, event = news.in_news_blackout(calendar_events)
+
+    if blackout:
+        print(f"Signal found but suppressed — inside news blackout for: {event['title']}")
+        # Don't update the cooldown state here: if the blackout window
+        # passes and the breakout is still live, we still want to alert once.
+        adaptive_filter.maybe_send_daily_summary()
+        return
+
+    message = notifier.format_signal_message(signal)
+    notifier.send_telegram_message(message)
+    print(f"Signal sent: {signal['direction']} @ {signal['price']:.2f}")
+
+    adaptive_filter.register_open_signal(signal, htf_trend)
+
+    order_result = execution.place_trade(signal)
+    if order_result is not None:
+        notifier.send_telegram_message(
+            f"✅ Trade placed on OANDA ({config.OANDA_ENVIRONMENT}): "
+            f"{signal['direction']} {config.OANDA_INSTRUMENT}"
+        )
+
+    st = state_mod.update_state_after_scan(signal, st)
+    state_mod.save_state(st)
+    adaptive_filter.maybe_send_daily_summary()
 
 
-def fetch_candles(interval, count=300):
-    """
-    Returns a DataFrame of the most recent `count` complete candles at the given
-    interval, or None on any failure (missing token, bad interval, request
-    error) so callers can fall back to another data source.
+def run_forever():
+    print("Starting XAUUSD scanner. Ctrl+C to stop.")
+    while True:
+        try:
+            run_once()
+        except Exception as e:
+            # Never let one bad scan kill the whole loop
+            print(f"[scanner] Unexpected error: {e}")
+        time.sleep(config.SCAN_INTERVAL_MINUTES * 60)
 
-    The last candle from OANDA is often still incomplete. We ignore
-    incomplete candles to keep the DataFrame aligned with the rest of the
-    codebase, which already treats the newest row as 'not yet closed'.
-    """
-    granularity = GRANULARITY_MAP.get(interval)
-    if not granularity:
-        print(f"[oanda_price] No OANDA granularity mapping for interval '{interval}'.")
-        return None
 
-    if not config.OANDA_API_TOKEN:
-        print("[oanda_price] OANDA_API_TOKEN not set — can't fetch OANDA price data.")
-        return None
+if __name__ == "__main__":
+    if "--once" in sys.argv:
+        run_once()
+    else:
+        run_forever()
 
-    url = f"{_base_url()}/v3/instruments/{config.OANDA_INSTRUMENT}/candles"
-    params = {"granularity": granularity, "count": count, "price": "M"}  # mid price
-
-    try:
-        resp = requests.get(url, headers=_headers(), params=params, timeout=15)
-        resp.raise_for_status()
-        candles = resp.json().get("candles", [])
-    except Exception as e:
-        print(f"[oanda_price] Failed to fetch candles: {e}")
-        return None
-
-    if not candles:
-        return None
-
-    rows, idx = [], []
-    for c in candles:
-        if c.get("complete") is False:
-            continue
-        mid = c.get("mid")
-        if not mid:
-            continue
-        idx.append(pd.to_datetime(c["time"]))
-        rows.append({
-            "Open": float(mid["o"]),
-            "High": float(mid["h"]),
-            "Low": float(mid["l"]),
-            "Close": float(mid["c"]),
-            "Volume": c.get("volume", 0),
-        })
-
-    if not rows:
-        return None
-
-    return pd.DataFrame(rows, index=idx)
