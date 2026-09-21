@@ -16,7 +16,7 @@ TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "PUT_YOUR_CHAT_ID_HERE")
 
 # --- Data ---
 TICKER = "GC=F"          # Gold futures (fallback proxy if OANDA is unavailable).
-CANDLE_INTERVAL = "15m"  # interval: 1m,2m,5m,15m,30m,60m,1d ...
+CANDLE_INTERVAL = "5m"   # interval: 1m,2m,5m,15m,30m,60m,1d ... (shorter = more setups/hour)
 LOOKBACK_PERIOD = "5d"   # how much history to pull each scan (yfinance fallback only)
 
 # Where live scan price data comes from. "oanda" (default) pulls straight
@@ -88,13 +88,13 @@ RISK_PER_TRADE_PERCENT = float(os.environ.get("RISK_PER_TRADE_PERCENT", "1.0"))
 STRATEGY_MODE = os.environ.get("STRATEGY_MODE", "smc")
 
 # --- Smart Money Concepts (smc.py) parameters ---
-SWING_LEFT = 2                  # bars on each side required to confirm a swing high/low
-SWING_RIGHT = 2
-SWEEP_LOOKBACK_BARS = 20        # how far back to look for a swing point that got swept
-FVG_SEARCH_BARS = 15            # how far back to look for a qualifying fair value gap
+SWING_LEFT = 1                  # bars on each side required to confirm a swing high/low
+SWING_RIGHT = 1
+SWEEP_LOOKBACK_BARS = 40        # how far back to look for a swing point that got swept
+FVG_SEARCH_BARS = 25            # how far back to look for a qualifying fair value gap
 TARGET_SEARCH_BARS = 50         # how far back to look for the nearest opposing liquidity (target)
 SMC_STOP_BUFFER_ATR_MULT = 0.25 # extra buffer beyond the sweep's wick, in ATR multiples
-MIN_RISK_REWARD = float(os.environ.get("MIN_RISK_REWARD", "2.0"))  # trades below this R:R are rejected
+MIN_RISK_REWARD = float(os.environ.get("MIN_RISK_REWARD", "1.3"))  # trades below this R:R are rejected
 
 # Inverse Fair Value Gap: when a normal FVG gets fully broken through
 # (price closes all the way past it), that same zone flips polarity and
