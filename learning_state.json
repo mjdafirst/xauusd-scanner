@@ -10,7 +10,7 @@
       "max_favorable_r": 0.3955863493420679,
       "max_adverse_r": 0.04692995636291778,
       "bucket_key": "smc|SHORT|down",
-      "age_bars": 2,
+      "age_bars": 3,
       "created_at": "2026-09-23T01:48:57.051837+00:00"
     }
   ],
