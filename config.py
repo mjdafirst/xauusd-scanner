@@ -46,6 +46,15 @@ ENABLE_INVERSE_FVG = os.environ.get("ENABLE_INVERSE_FVG", "true").lower() == "tr
 USE_TTRADES_CONTEXT = os.environ.get("USE_TTRADES_CONTEXT", "true").lower() == "true"
 TTRADES_BIAS_LOOKBACK_BARS = int(os.environ.get("TTRADES_BIAS_LOOKBACK_BARS", "80"))
 
+# --- TTrades Fractal Model (TTFM) settings ---
+# Set STRATEGY_MODE=ttfm (env var) to use this mode instead of "smc" or
+# "breakout". See ttfm.py for the full logic (Candle 2 sweep -> CISD
+# confirmation -> equilibrium retracement entry).
+TTFM_CISD_MAX_AGE_BARS = int(os.environ.get("TTFM_CISD_MAX_AGE_BARS", "15"))
+TTFM_MAX_RETRACE_AGE_BARS = int(os.environ.get("TTFM_MAX_RETRACE_AGE_BARS", "20"))
+TTFM_STOP_BUFFER_ATR_MULT = float(os.environ.get("TTFM_STOP_BUFFER_ATR_MULT", "0.25"))
+TTFM_EQUILIBRIUM_TOLERANCE_ATR_MULT = float(os.environ.get("TTFM_EQUILIBRIUM_TOLERANCE_ATR_MULT", "0.15"))
+
 FOMC_KEYWORDS = ["fomc", "interest rate", "rate decision", "press conference", "fed chair"]
 FOMC_BLACKOUT_MINUTES = int(os.environ.get("FOMC_BLACKOUT_MINUTES", "60"))
 NEWS_BLACKOUT_MINUTES = int(os.environ.get("NEWS_BLACKOUT_MINUTES", "30"))
@@ -68,7 +77,10 @@ _ALLOWED = {
     "EMA_FAST", "EMA_SLOW", "ATR_STOP_MULT", "ATR_TARGET_MULT",
     "SWEEP_LOOKBACK_BARS", "FVG_SEARCH_BARS", "MAX_SWEEP_AGE_BARS",
     "SMC_STOP_BUFFER_ATR_MULT", "MIN_RISK_REWARD",
+    "TTFM_CISD_MAX_AGE_BARS", "TTFM_MAX_RETRACE_AGE_BARS",
+    "TTFM_STOP_BUFFER_ATR_MULT", "TTFM_EQUILIBRIUM_TOLERANCE_ATR_MULT",
 }
+
 try:
     with open(STRATEGY_CONFIG_FILE, "r", encoding="utf-8") as file:
         candidate = json.load(file).get("parameters", {})
