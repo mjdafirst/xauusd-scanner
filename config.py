@@ -46,6 +46,11 @@ SMC_STOP_BUFFER_ATR_MULT = 0.25
 MIN_RISK_REWARD = float(os.environ.get("MIN_RISK_REWARD", "1.3"))
 ENABLE_INVERSE_FVG = os.environ.get("ENABLE_INVERSE_FVG", "true").lower() == "true"
 
+# TTrades / ICT-inspired context filter. It keeps entries aligned with the
+# dominant bias and prefers value zones rather than chasing price into premium.
+USE_TTRADES_CONTEXT = os.environ.get("USE_TTRADES_CONTEXT", "true").lower() == "true"
+TTRADES_BIAS_LOOKBACK_BARS = int(os.environ.get("TTRADES_BIAS_LOOKBACK_BARS", "80"))
+
 FOMC_KEYWORDS = ["fomc", "interest rate", "rate decision", "press conference", "fed chair"]
 FOMC_BLACKOUT_MINUTES = int(os.environ.get("FOMC_BLACKOUT_MINUTES", "60"))
 NEWS_BLACKOUT_MINUTES = 30
