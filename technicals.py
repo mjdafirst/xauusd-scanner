@@ -21,7 +21,7 @@ def fetch_price_data():
         print("[technicals] OANDA fetch failed; falling back to yfinance.")
     try:
         df = yf.download(tickers=config.TICKER, period=config.LOOKBACK_PERIOD,
-                         interval=config.CANDLE_INTERVAL, progress=False)
+                          interval=config.CANDLE_INTERVAL, progress=False, timeout=10)
         if df.empty:
             return None
         return _flatten_columns(df).dropna()
@@ -43,7 +43,7 @@ def fetch_htf_trend():
             return None
     try:
         df = yf.download(tickers=config.TICKER, period=config.HTF_LOOKBACK_PERIOD,
-                         interval=config.HTF_INTERVAL, progress=False)
+                          interval=config.HTF_INTERVAL, progress=False, timeout=10)
         if df.empty:
             return None
         df = _flatten_columns(df).dropna()
