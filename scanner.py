@@ -1,7 +1,7 @@
 import sys
 import time
 from datetime import datetime, timezone
-import adaptive_filter, config, technicals, smc, ttfm, news, notifier, state as state_mod, execution
+import adaptive_filter, config, technicals, smc, ttfm, range_4h, news, notifier, state as state_mod, execution
 
 
 def select_signal(df, trend):
@@ -9,6 +9,8 @@ def select_signal(df, trend):
         return smc.detect_smc_signal(df, htf_trend=trend)
     if config.STRATEGY_MODE == "ttfm":
         return ttfm.detect_ttfm_signal(df, htf_trend=trend)
+    if config.STRATEGY_MODE == "range_4h":
+        return range_4h.detect_range_4h_signal(df, htf_trend=trend)
     return technicals.detect_signal(df, htf_trend=trend)
 
 
