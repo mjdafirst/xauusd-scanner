@@ -1,19 +1,5 @@
 {
-  "open_signals": [
-    {
-      "id": "0387e6d7-cace-461a-ac55-938cb897f64b",
-      "direction": "LONG",
-      "price": 4157.615,
-      "stop": 4154.412142857143,
-      "target": 4161.778714285713,
-      "initial_risk": 3.2028571428563737,
-      "max_favorable_r": 0.0,
-      "max_adverse_r": 0.0,
-      "bucket_key": "ttfm|LONG|up",
-      "age_bars": 0,
-      "created_at": "2026-10-13T16:57:55.213416+00:00"
-    }
-  ],
+  "open_signals": [],
   "bucket_stats": {
     "smc|SHORT|down": {
       "trades": 2,
@@ -28,6 +14,13 @@
       "losses": 2,
       "expired": 0,
       "expectancy_sum": -0.6999999999999673
+    },
+    "ttfm|LONG|up": {
+      "trades": 1,
+      "wins": 0,
+      "losses": 1,
+      "expired": 0,
+      "expectancy_sum": -1.0
     }
   },
   "last_daily_summary_date": null,
@@ -787,6 +780,384 @@
       "stop_factor": 2.0,
       "target_r": 3.5,
       "bucket": "ttfm|SHORT|down"
+    },
+    "ttfm|LONG|up|0.75|1.30": {
+      "trades": 1,
+      "wins": 0,
+      "losses": 1,
+      "expectancy_sum": -1.0,
+      "stop_factor": 0.75,
+      "target_r": 1.3,
+      "bucket": "ttfm|LONG|up"
+    },
+    "ttfm|LONG|up|0.75|1.50": {
+      "trades": 1,
+      "wins": 0,
+      "losses": 1,
+      "expectancy_sum": -1.0,
+      "stop_factor": 0.75,
+      "target_r": 1.5,
+      "bucket": "ttfm|LONG|up"
+    },
+    "ttfm|LONG|up|0.75|1.75": {
+      "trades": 1,
+      "wins": 0,
+      "losses": 1,
+      "expectancy_sum": -1.0,
+      "stop_factor": 0.75,
+      "target_r": 1.75,
+      "bucket": "ttfm|LONG|up"
+    },
+    "ttfm|LONG|up|0.75|2.00": {
+      "trades": 1,
+      "wins": 0,
+      "losses": 1,
+      "expectancy_sum": -1.0,
+      "stop_factor": 0.75,
+      "target_r": 2.0,
+      "bucket": "ttfm|LONG|up"
+    },
+    "ttfm|LONG|up|0.75|2.50": {
+      "trades": 1,
+      "wins": 0,
+      "losses": 1,
+      "expectancy_sum": -1.0,
+      "stop_factor": 0.75,
+      "target_r": 2.5,
+      "bucket": "ttfm|LONG|up"
+    },
+    "ttfm|LONG|up|0.75|3.00": {
+      "trades": 1,
+      "wins": 0,
+      "losses": 1,
+      "expectancy_sum": -1.0,
+      "stop_factor": 0.75,
+      "target_r": 3.0,
+      "bucket": "ttfm|LONG|up"
+    },
+    "ttfm|LONG|up|0.75|3.50": {
+      "trades": 1,
+      "wins": 0,
+      "losses": 1,
+      "expectancy_sum": -1.0,
+      "stop_factor": 0.75,
+      "target_r": 3.5,
+      "bucket": "ttfm|LONG|up"
+    },
+    "ttfm|LONG|up|1.00|1.30": {
+      "trades": 1,
+      "wins": 0,
+      "losses": 1,
+      "expectancy_sum": -1.0,
+      "stop_factor": 1.0,
+      "target_r": 1.3,
+      "bucket": "ttfm|LONG|up"
+    },
+    "ttfm|LONG|up|1.00|1.50": {
+      "trades": 1,
+      "wins": 0,
+      "losses": 1,
+      "expectancy_sum": -1.0,
+      "stop_factor": 1.0,
+      "target_r": 1.5,
+      "bucket": "ttfm|LONG|up"
+    },
+    "ttfm|LONG|up|1.00|1.75": {
+      "trades": 1,
+      "wins": 0,
+      "losses": 1,
+      "expectancy_sum": -1.0,
+      "stop_factor": 1.0,
+      "target_r": 1.75,
+      "bucket": "ttfm|LONG|up"
+    },
+    "ttfm|LONG|up|1.00|2.00": {
+      "trades": 1,
+      "wins": 0,
+      "losses": 1,
+      "expectancy_sum": -1.0,
+      "stop_factor": 1.0,
+      "target_r": 2.0,
+      "bucket": "ttfm|LONG|up"
+    },
+    "ttfm|LONG|up|1.00|2.50": {
+      "trades": 1,
+      "wins": 0,
+      "losses": 1,
+      "expectancy_sum": -1.0,
+      "stop_factor": 1.0,
+      "target_r": 2.5,
+      "bucket": "ttfm|LONG|up"
+    },
+    "ttfm|LONG|up|1.00|3.00": {
+      "trades": 1,
+      "wins": 0,
+      "losses": 1,
+      "expectancy_sum": -1.0,
+      "stop_factor": 1.0,
+      "target_r": 3.0,
+      "bucket": "ttfm|LONG|up"
+    },
+    "ttfm|LONG|up|1.00|3.50": {
+      "trades": 1,
+      "wins": 0,
+      "losses": 1,
+      "expectancy_sum": -1.0,
+      "stop_factor": 1.0,
+      "target_r": 3.5,
+      "bucket": "ttfm|LONG|up"
+    },
+    "ttfm|LONG|up|1.25|1.30": {
+      "trades": 1,
+      "wins": 0,
+      "losses": 1,
+      "expectancy_sum": -1.0,
+      "stop_factor": 1.25,
+      "target_r": 1.3,
+      "bucket": "ttfm|LONG|up"
+    },
+    "ttfm|LONG|up|1.25|1.50": {
+      "trades": 1,
+      "wins": 0,
+      "losses": 1,
+      "expectancy_sum": -1.0,
+      "stop_factor": 1.25,
+      "target_r": 1.5,
+      "bucket": "ttfm|LONG|up"
+    },
+    "ttfm|LONG|up|1.25|1.75": {
+      "trades": 1,
+      "wins": 0,
+      "losses": 1,
+      "expectancy_sum": -1.0,
+      "stop_factor": 1.25,
+      "target_r": 1.75,
+      "bucket": "ttfm|LONG|up"
+    },
+    "ttfm|LONG|up|1.25|2.00": {
+      "trades": 1,
+      "wins": 0,
+      "losses": 1,
+      "expectancy_sum": -1.0,
+      "stop_factor": 1.25,
+      "target_r": 2.0,
+      "bucket": "ttfm|LONG|up"
+    },
+    "ttfm|LONG|up|1.25|2.50": {
+      "trades": 1,
+      "wins": 0,
+      "losses": 1,
+      "expectancy_sum": -1.0,
+      "stop_factor": 1.25,
+      "target_r": 2.5,
+      "bucket": "ttfm|LONG|up"
+    },
+    "ttfm|LONG|up|1.25|3.00": {
+      "trades": 1,
+      "wins": 0,
+      "losses": 1,
+      "expectancy_sum": -1.0,
+      "stop_factor": 1.25,
+      "target_r": 3.0,
+      "bucket": "ttfm|LONG|up"
+    },
+    "ttfm|LONG|up|1.25|3.50": {
+      "trades": 1,
+      "wins": 0,
+      "losses": 1,
+      "expectancy_sum": -1.0,
+      "stop_factor": 1.25,
+      "target_r": 3.5,
+      "bucket": "ttfm|LONG|up"
+    },
+    "ttfm|LONG|up|1.50|1.30": {
+      "trades": 1,
+      "wins": 0,
+      "losses": 1,
+      "expectancy_sum": -1.0,
+      "stop_factor": 1.5,
+      "target_r": 1.3,
+      "bucket": "ttfm|LONG|up"
+    },
+    "ttfm|LONG|up|1.50|1.50": {
+      "trades": 1,
+      "wins": 0,
+      "losses": 1,
+      "expectancy_sum": -1.0,
+      "stop_factor": 1.5,
+      "target_r": 1.5,
+      "bucket": "ttfm|LONG|up"
+    },
+    "ttfm|LONG|up|1.50|1.75": {
+      "trades": 1,
+      "wins": 0,
+      "losses": 1,
+      "expectancy_sum": -1.0,
+      "stop_factor": 1.5,
+      "target_r": 1.75,
+      "bucket": "ttfm|LONG|up"
+    },
+    "ttfm|LONG|up|1.50|2.00": {
+      "trades": 1,
+      "wins": 0,
+      "losses": 1,
+      "expectancy_sum": -1.0,
+      "stop_factor": 1.5,
+      "target_r": 2.0,
+      "bucket": "ttfm|LONG|up"
+    },
+    "ttfm|LONG|up|1.50|2.50": {
+      "trades": 1,
+      "wins": 0,
+      "losses": 1,
+      "expectancy_sum": -1.0,
+      "stop_factor": 1.5,
+      "target_r": 2.5,
+      "bucket": "ttfm|LONG|up"
+    },
+    "ttfm|LONG|up|1.50|3.00": {
+      "trades": 1,
+      "wins": 0,
+      "losses": 1,
+      "expectancy_sum": -1.0,
+      "stop_factor": 1.5,
+      "target_r": 3.0,
+      "bucket": "ttfm|LONG|up"
+    },
+    "ttfm|LONG|up|1.50|3.50": {
+      "trades": 1,
+      "wins": 0,
+      "losses": 1,
+      "expectancy_sum": -1.0,
+      "stop_factor": 1.5,
+      "target_r": 3.5,
+      "bucket": "ttfm|LONG|up"
+    },
+    "ttfm|LONG|up|1.75|1.30": {
+      "trades": 1,
+      "wins": 0,
+      "losses": 1,
+      "expectancy_sum": -1.0,
+      "stop_factor": 1.75,
+      "target_r": 1.3,
+      "bucket": "ttfm|LONG|up"
+    },
+    "ttfm|LONG|up|1.75|1.50": {
+      "trades": 1,
+      "wins": 0,
+      "losses": 1,
+      "expectancy_sum": -1.0,
+      "stop_factor": 1.75,
+      "target_r": 1.5,
+      "bucket": "ttfm|LONG|up"
+    },
+    "ttfm|LONG|up|1.75|1.75": {
+      "trades": 1,
+      "wins": 0,
+      "losses": 1,
+      "expectancy_sum": -1.0,
+      "stop_factor": 1.75,
+      "target_r": 1.75,
+      "bucket": "ttfm|LONG|up"
+    },
+    "ttfm|LONG|up|1.75|2.00": {
+      "trades": 1,
+      "wins": 0,
+      "losses": 1,
+      "expectancy_sum": -1.0,
+      "stop_factor": 1.75,
+      "target_r": 2.0,
+      "bucket": "ttfm|LONG|up"
+    },
+    "ttfm|LONG|up|1.75|2.50": {
+      "trades": 1,
+      "wins": 0,
+      "losses": 1,
+      "expectancy_sum": -1.0,
+      "stop_factor": 1.75,
+      "target_r": 2.5,
+      "bucket": "ttfm|LONG|up"
+    },
+    "ttfm|LONG|up|1.75|3.00": {
+      "trades": 1,
+      "wins": 0,
+      "losses": 1,
+      "expectancy_sum": -1.0,
+      "stop_factor": 1.75,
+      "target_r": 3.0,
+      "bucket": "ttfm|LONG|up"
+    },
+    "ttfm|LONG|up|1.75|3.50": {
+      "trades": 1,
+      "wins": 0,
+      "losses": 1,
+      "expectancy_sum": -1.0,
+      "stop_factor": 1.75,
+      "target_r": 3.5,
+      "bucket": "ttfm|LONG|up"
+    },
+    "ttfm|LONG|up|2.00|1.30": {
+      "trades": 1,
+      "wins": 0,
+      "losses": 1,
+      "expectancy_sum": -1.0,
+      "stop_factor": 2.0,
+      "target_r": 1.3,
+      "bucket": "ttfm|LONG|up"
+    },
+    "ttfm|LONG|up|2.00|1.50": {
+      "trades": 1,
+      "wins": 0,
+      "losses": 1,
+      "expectancy_sum": -1.0,
+      "stop_factor": 2.0,
+      "target_r": 1.5,
+      "bucket": "ttfm|LONG|up"
+    },
+    "ttfm|LONG|up|2.00|1.75": {
+      "trades": 1,
+      "wins": 0,
+      "losses": 1,
+      "expectancy_sum": -1.0,
+      "stop_factor": 2.0,
+      "target_r": 1.75,
+      "bucket": "ttfm|LONG|up"
+    },
+    "ttfm|LONG|up|2.00|2.00": {
+      "trades": 1,
+      "wins": 0,
+      "losses": 1,
+      "expectancy_sum": -1.0,
+      "stop_factor": 2.0,
+      "target_r": 2.0,
+      "bucket": "ttfm|LONG|up"
+    },
+    "ttfm|LONG|up|2.00|2.50": {
+      "trades": 1,
+      "wins": 0,
+      "losses": 1,
+      "expectancy_sum": -1.0,
+      "stop_factor": 2.0,
+      "target_r": 2.5,
+      "bucket": "ttfm|LONG|up"
+    },
+    "ttfm|LONG|up|2.00|3.00": {
+      "trades": 1,
+      "wins": 0,
+      "losses": 1,
+      "expectancy_sum": -1.0,
+      "stop_factor": 2.0,
+      "target_r": 3.0,
+      "bucket": "ttfm|LONG|up"
+    },
+    "ttfm|LONG|up|2.00|3.50": {
+      "trades": 1,
+      "wins": 0,
+      "losses": 1,
+      "expectancy_sum": -1.0,
+      "stop_factor": 2.0,
+      "target_r": 3.5,
+      "bucket": "ttfm|LONG|up"
     }
   }
 }
