@@ -1,5 +1,19 @@
 {
-  "open_signals": [],
+  "open_signals": [
+    {
+      "id": "0387e6d7-cace-461a-ac55-938cb897f64b",
+      "direction": "LONG",
+      "price": 4157.615,
+      "stop": 4154.412142857143,
+      "target": 4161.778714285713,
+      "initial_risk": 3.2028571428563737,
+      "max_favorable_r": 0.0,
+      "max_adverse_r": 0.0,
+      "bucket_key": "ttfm|LONG|up",
+      "age_bars": 0,
+      "created_at": "2026-10-13T16:57:55.213416+00:00"
+    }
+  ],
   "bucket_stats": {
     "smc|SHORT|down": {
       "trades": 2,
