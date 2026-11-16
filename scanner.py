@@ -19,29 +19,47 @@ def run_once():
     df = technicals.fetch_price_data()
     if df is None:
         return
+
+    state = state_mod.load_state()
+    state, closed_trades = state_mod.check_open_trades(df, state)
+    for trade in closed_trades:
+        notifier.send_telegram_message(notifier.format_trade_result_message(trade))
+    state_mod.save_state(state)
+
     adaptive_filter.update_open_signals(df)
     trend = technicals.fetch_htf_trend()
     signal = select_signal(df, trend)
+
     if signal and adaptive_filter.should_block_signal(signal, trend):
         print("Signal filtered by learned bucket performance.")
         return
+
     if not signal:
         state_mod.save_state(state_mod.update_state_after_scan(None, state_mod.load_state()))
         return
+
     st = state_mod.load_state()
     if not state_mod.should_alert(signal, st):
         return
+
     blackout, event = news.in_news_blackout(news.fetch_calendar())
     if blackout:
         print(f"Signal suppressed by news: {event['title']}")
         return
+
     notifier.send_telegram_message(notifier.format_signal_message(signal))
+
+    # Track the alerted idea for Telegram TP/SL result updates. This works
+    # in alert-only mode as well as when OANDA auto-trading is enabled.
+    st = state_mod.register_alerted_trade(signal, st)
+
     result = execution.place_trade(signal)
     if result is not None:
         adaptive_filter.register_open_signal(signal, trend, result)
         notifier.send_telegram_message(f"Trade placed on OANDA {config.OANDA_ENVIRONMENT}: {signal['direction']}")
     else:
         notifier.send_telegram_message("OANDA order was not confirmed; learning record was not opened.")
+
     state_mod.save_state(state_mod.update_state_after_scan(signal, st))
 
 
