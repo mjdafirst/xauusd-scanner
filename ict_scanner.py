@@ -1,8 +1,4 @@
-"""Dedicated Scanner and Auto-Trader for the 5 ICT Entry Models.
-
-Runs every 15 minutes, evaluates Models 1-5 (FVG, BPR, IFVG, BB, and BB+FVG Confluence),
-manages its own state (ict_models_state.json), and places practice orders on OANDA.
-"""
+"""Dedicated scanner for ICT entry models; reports only verified broker fills."""
 
 import sys
 import time
@@ -15,6 +11,7 @@ import ict_models
 import news
 import notifier
 import execution
+from order_feedback import format_order_result
 
 STATE_FILE = Path("ict_models_state.json")
 
@@ -69,13 +66,18 @@ def run_once():
         print(f"[ict_scanner] Suppressed by news: {event['title']}")
         return
 
-    msg = f"⚡ *XAUUSD — ICT {signal['model']}*\n" + notifier.format_signal_message(signal)
+    msg = f"ICT {signal['model']}\n" + notifier.format_signal_message(signal)
     notifier.send_telegram_message(msg)
 
     if config.AUTO_TRADE_ENABLED:
         result = execution.place_trade(signal)
-        if result is not None:
-            notifier.send_telegram_message(f"ICT Order filled on OANDA practice ({config.OANDA_ENVIRONMENT}): {signal['direction']} ({signal['model']})")
+        feedback = format_order_result(
+            result, signal["direction"], signal["model"],
+            config.OANDA_ACCOUNT_ID, config.OANDA_ENVIRONMENT)
+        print(f"[ict_scanner] {feedback}")
+        notifier.send_telegram_message(feedback)
+    else:
+        notifier.send_telegram_message("ICT alert only: automatic trading is disabled; no order submitted.")
 
     state["last_alert_direction"] = signal["direction"]
     state["last_alert_time"] = datetime.now(timezone.utc).strftime("%Y-%m-%d %H")
