@@ -1,12 +1,5 @@
 {
-  "last_alert_direction": "LONG",
-  "last_alert_time": "2026-11-24 04",
-  "broker_trades": {
-    "853f44f55c373b7e266cf09cd97061b2cc4dbd5b966f02fde8888844863bb290:587": {
-      "trade_id": "587",
-      "scope": "853f44f55c373b7e266cf09cd97061b2cc4dbd5b966f02fde8888844863bb290",
-      "direction": "LONG",
-      "model": "Model 4 (Sweep + MSS + BB)"
-    }
-  }
+  "last_alert_direction": "SHORT",
+  "last_alert_time": "2026-11-24 15",
+  "broker_trades": {}
 }
